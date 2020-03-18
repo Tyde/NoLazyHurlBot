@@ -62,7 +62,7 @@ class Config {
 
 class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
     override fun getBotUsername(): String {
-        return "de.darmstadtgaa.NoLazyHurlBot"
+        return "NoLazyHurlBot"
     }
 
     override fun getBotToken(): String {
@@ -70,7 +70,7 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
     }
 
     val hashtagRegex = Regex("#nolazyhurl",RegexOption.IGNORE_CASE)
-    val lengthRegex = Regex("""(\d+)[\.,]*(\d*)\s*(km|mi)*""",RegexOption.IGNORE_CASE)
+    val lengthRegex = Regex("""(\d+)[\.,]*(\d*)\s*(km|mi[\s$])*""",RegexOption.IGNORE_CASE)
     var numberFormatter: NumberFormat = DecimalFormat("#0.00")
 
     private final val CORRECT_VALUE_CALLBACK = "correctValue"
@@ -140,15 +140,19 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
             val sums = (Runs innerJoin Users)
                 .slice(
                     Runs.length.sum(),
+                    Runs.length.count(),
                     Users.customAlias,
                     Users.officalName
                 )
                 .select { Runs.isConfirmed eq true }
                 .groupBy(Runs.user)
+                .orderBy(Runs.length.sum() to SortOrder.DESC)
+            var count=0
             sums.fold("#NoLazyHurlListe", { acc, res ->
                 val name = res.getOrNull(Users.customAlias) ?: res[Users.officalName]
-                acc + System.lineSeparator() +
-                        "$name: ${numberFormatter.format(res[Runs.length.sum()])} km"
+                count ++
+                acc + System.lineSeparator() + count+". "+
+                        "$name: ${numberFormatter.format(res[Runs.length.sum()])} km in ${res[Runs.length.count()]} Läufen"
             })
         }
 
@@ -174,7 +178,7 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
         if (recievedText != null && hashtagRegex.containsMatchIn(recievedText)) {
             handleHashtag(recievedText, message)
         } else if(recievedText != null && recievedText.startsWith("/")) {
-            val isGroupCommand = recievedText.equals("/list@de.darmstadtgaa.NoLazyHurlBot",ignoreCase = true) &&
+            val isGroupCommand = recievedText.equals("/list@NoLazyHurlBot",ignoreCase = true) &&
                     (update.message.chat.isGroupChat || update.message.chat.isSuperGroupChat)
             val isPrivateCommand = recievedText.startsWith("/list",ignoreCase = true) &&
                     (update.message.chat.isUserChat)
@@ -190,12 +194,23 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
                 val user = User.fromIdOrCreate(
                     from.id,
                     from.firstName,
-                    from.lastName
+                    from.lastName ?: ""
                 )
                 val resultText = transaction {
                     Run.find { Runs.user eq user.id }.fold("", { acc, run ->
                         acc + System.lineSeparator() +
                                 "${run.time.format(formatter)}: ${numberFormatter.format(run.length)} km"
+                    })
+                }
+                execute(SendMessage().apply {
+                    chatId = message.chatId.toString()
+                    text = resultText
+                })
+            } else if(recievedText.startsWith("/allruns")&& update.message.chat.isUserChat) {
+                val resultText = transaction {
+                    Run.all().fold("", { acc, run ->
+                        acc + System.lineSeparator() +
+                                "${run.time.format(formatter)} - ${run.user.customAlias?:run.user.officialName}: ${numberFormatter.format(run.length)} km"
                     })
                 }
                 execute(SendMessage().apply {
@@ -224,7 +239,7 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
             var user = User.fromIdOrCreate(
                 userId,
                 message.from.firstName,
-                message.from.lastName
+                message.from.lastName?: ""
             )
             val forwardFrom = message.forwardFrom
             if (forwardFrom != null) {
@@ -266,7 +281,7 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
         } else {
             val command = SendMessage().apply {
                 chatId = message.chatId.toString()
-                text = "Ich kann die Strecke nicht erkennen. Bitte im Format #NoLazyHurl ##,## km schreiben"
+                text = "Ich kann die Streckenlänge nicht erkennen. Bitte im Format #NoLazyHurl ##,## km schreiben"
             }
             execute(command)
         }

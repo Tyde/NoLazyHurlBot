@@ -150,9 +150,11 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
             var count=0
             sums.fold("#NoLazyHurlListe", { acc, res ->
                 val name = res.getOrNull(Users.customAlias) ?: res[Users.officalName]
+                val numberOfRuns = res[Runs.length.count()]
+                val textRunRuns = if (numberOfRuns==1L) "Lauf" else "Läufen"
                 count ++
                 acc + System.lineSeparator() + count+". "+
-                        "$name: ${numberFormatter.format(res[Runs.length.sum()])} km in ${res[Runs.length.count()]} Läufen"
+                        "$name: ${numberFormatter.format(res[Runs.length.sum()])} km in $numberOfRuns $textRunRuns"
             })
         }
 

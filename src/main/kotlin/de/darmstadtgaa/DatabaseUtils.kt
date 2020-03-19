@@ -48,6 +48,7 @@ object Runs : IntIdTable() {
     val time = datetime("time")
     val length = decimal("length", precision = 8, scale = 3)
     val isConfirmed = bool("is_confirmed")
+    val isBike = bool("is_bike").default(false)
 }
 
 class Run(id:EntityID<Int>) : IntEntity(id) {
@@ -56,4 +57,7 @@ class Run(id:EntityID<Int>) : IntEntity(id) {
     var time by Runs.time
     var length by Runs.length
     var isConfirmed by Runs.isConfirmed
+    var isBike by Runs.isBike
 }
+
+

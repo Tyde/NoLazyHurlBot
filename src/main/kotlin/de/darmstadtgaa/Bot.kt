@@ -70,6 +70,7 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
     }
 
     val hashtagRegex = Regex("#nolazyhurl",RegexOption.IGNORE_CASE)
+    val bikeHastagRegex = Regex("#nolazybike",RegexOption.IGNORE_CASE)
     val lengthRegex = Regex("""(\d+)[\.,]*(\d*)\s*(km|mi[\s$])*""",RegexOption.IGNORE_CASE)
     var numberFormatter: NumberFormat = DecimalFormat("#0.00")
 
@@ -121,7 +122,8 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
             val run = runId?.let { it -> Run.find { Runs.id eq it }.firstOrNull() }
             run?.isConfirmed = true
         }
-        var composedList = composeList()
+        var composedList = composeCompleteList()
+
 
 
         //Change Message
@@ -134,7 +136,7 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
         })
     }
 
-    private fun composeList(): String {
+    private fun composeList(isBike: Boolean = false): String {
         //Compose Message
         var composedList = transaction {
             val sums = (Runs innerJoin Users)
@@ -144,14 +146,18 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
                     Users.customAlias,
                     Users.officalName
                 )
-                .select { Runs.isConfirmed eq true }
+                .select { Runs.isConfirmed eq true and (Runs.isBike eq isBike) }
                 .groupBy(Runs.user)
                 .orderBy(Runs.length.sum() to SortOrder.DESC)
             var count=0
-            sums.fold("#NoLazyHurlListe", { acc, res ->
+
+            val listName = if (isBike) "#NoLazyBikeListe" else "#NoLazyHurlListe"
+            val singularName = if (isBike) "Fahrt" else "Lauf"
+            val pluralName = if (isBike) "Fahrten" else "Läufen"
+            sums.fold(listName, { acc, res ->
                 val name = res.getOrNull(Users.customAlias) ?: res[Users.officalName]
                 val numberOfRuns = res[Runs.length.count()]
-                val textRunRuns = if (numberOfRuns==1L) "Lauf" else "Läufen"
+                val textRunRuns = if (numberOfRuns==1L) singularName else pluralName
                 count ++
                 acc + System.lineSeparator() + count+". "+
                         "$name: ${numberFormatter.format(res[Runs.length.sum()])} km in $numberOfRuns $textRunRuns"
@@ -159,7 +165,7 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
         }
 
         val total = transaction {
-            Runs.slice(Runs.length.sum()).selectAll().firstOrNull()?.getOrNull(
+            Runs.slice(Runs.length.sum()).select{Runs.isBike eq isBike}.firstOrNull()?.getOrNull(
                 Runs.length.sum())
         }
 
@@ -167,6 +173,11 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
                 "Gesamt: ${numberFormatter.format(total)} km"
         return composedList
     }
+
+    private fun composeCompleteList():String {
+        return composeList()+System.lineSeparator()+System.lineSeparator()+composeList(true)
+    }
+
     var formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private fun handleSimpleMessage(update: Update) {
         val message = update.message!!
@@ -177,54 +188,62 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
         } else {
             null
         }
-        if (recievedText != null && hashtagRegex.containsMatchIn(recievedText)) {
-            handleHashtag(recievedText, message)
-        } else if(recievedText != null && recievedText.startsWith("/")) {
-            val isGroupCommand = recievedText.equals("/list@NoLazyHurlBot",ignoreCase = true) &&
-                    (update.message.chat.isGroupChat || update.message.chat.isSuperGroupChat)
-            val isPrivateCommand = recievedText.startsWith("/list",ignoreCase = true) &&
-                    (update.message.chat.isUserChat)
-            if (isGroupCommand || isPrivateCommand) {
-                val listString = composeList()
+        if (recievedText != null) {
+            if (hashtagRegex.containsMatchIn(recievedText)) {
+                handleHashtag(recievedText, message)
+            } else if (bikeHastagRegex.containsMatchIn(recievedText)) {
+                //Handle BikeHastag
+                handleHashtag(recievedText, message, true)
+            } else if (recievedText.startsWith("/")) {
+                //Only react to list command in correct circumstances
+                val isGroupCommand = recievedText.equals("/list@NoLazyHurlBot", ignoreCase = true) &&
+                        (update.message.chat.isGroupChat || update.message.chat.isSuperGroupChat)
+                val isPrivateCommand = recievedText.startsWith("/list", ignoreCase = true) &&
+                        (update.message.chat.isUserChat)
 
-                execute(SendMessage().apply {
-                    chatId = message.chatId.toString()
-                    text = listString
-                })
-            } else if (recievedText.startsWith("/myruns") && update.message.chat.isUserChat) {
-                val from = update.message.from
-                val user = User.fromIdOrCreate(
-                    from.id,
-                    from.firstName,
-                    from.lastName ?: ""
-                )
-                val resultText = transaction {
-                    Run.find { Runs.user eq user.id }.fold("", { acc, run ->
-                        acc + System.lineSeparator() +
-                                "${run.time.format(formatter)}: ${numberFormatter.format(run.length)} km"
+                if (isGroupCommand || isPrivateCommand) {
+                    val listString = composeCompleteList()
+
+                    execute(SendMessage().apply {
+                        chatId = message.chatId.toString()
+                        text = listString
+                    })
+                } else if (recievedText.startsWith("/myruns") && update.message.chat.isUserChat) {
+                    val from = update.message.from
+                    val user = User.fromIdOrCreate(
+                        from.id,
+                        from.firstName,
+                        from.lastName ?: ""
+                    )
+                    val resultText = transaction {
+                        Run.find { Runs.user eq user.id }.fold("", { acc, run ->
+                            acc + System.lineSeparator() +
+                                    "${run.time.format(formatter)}: ${numberFormatter.format(run.length)} km"
+                        })
+                    }
+                    execute(SendMessage().apply {
+                        chatId = message.chatId.toString()
+                        text = resultText
+                    })
+                } else if (recievedText.startsWith("/allruns") && update.message.chat.isUserChat) {
+                    val resultText = transaction {
+                        Run.all().fold("", { acc, run ->
+                            acc + System.lineSeparator() +
+                                    "${run.time.format(formatter)} - ${run.user.customAlias
+                                        ?: run.user.officialName}: ${numberFormatter.format(run.length)} km"
+                        })
+                    }
+                    execute(SendMessage().apply {
+                        chatId = message.chatId.toString()
+                        text = resultText
                     })
                 }
-                execute(SendMessage().apply {
-                    chatId = message.chatId.toString()
-                    text = resultText
-                })
-            } else if(recievedText.startsWith("/allruns")&& update.message.chat.isUserChat) {
-                val resultText = transaction {
-                    Run.all().fold("", { acc, run ->
-                        acc + System.lineSeparator() +
-                                "${run.time.format(formatter)} - ${run.user.customAlias?:run.user.officialName}: ${numberFormatter.format(run.length)} km"
-                    })
-                }
-                execute(SendMessage().apply {
-                    chatId = message.chatId.toString()
-                    text = resultText
-                })
+
             }
-
         }
     }
 
-    private fun handleHashtag(recievedText: String, message: Message) {
+    private fun handleHashtag(recievedText: String, message: Message, isBike:Boolean = false) {
         if (lengthRegex.containsMatchIn(recievedText)) {
             //found nr.
             val matches = lengthRegex.find(recievedText)?.groups
@@ -252,15 +271,17 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
                 )
             }
             transaction {
+
                 val run = Run.new {
                     this.user = user
                     this.length = number.toBigDecimal()
                     this.time = LocalDateTime.now()
                     this.isConfirmed = false
+                    this.isBike = isBike
                 }
 
-
-                val textReturn = "Du bist ${numberFormatter.format(number)} km gelaufen, korrekt?"
+                val actionVerb = if(isBike) "Fahrrad gefahren" else "gelaufen"
+                val textReturn = "Du bist ${numberFormatter.format(number)} km $actionVerb, korrekt?"
                 val command = SendMessage().apply {
                     chatId = message.chatId.toString()
                     text = textReturn
@@ -292,3 +313,6 @@ class NoLazyHurlBot(private val token: String) : TelegramLongPollingBot() {
 
 
 }
+
+
+

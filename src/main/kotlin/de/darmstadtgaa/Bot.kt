@@ -16,6 +16,7 @@ import org.telegram.telegrambots.meta.api.objects.Message
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException
 import java.io.File
 import java.math.BigDecimal
 import java.sql.Connection
@@ -42,7 +43,7 @@ fun main() {
     }
     ApiContextInitializer.init()
     val botsApi = TelegramBotsApi()
-    val noLazyHurlBot = NoLazyHurlBot(token,publicChatId)
+    val noLazyHurlBot = NoLazyHurlBot(token, publicChatId)
     botsApi.registerBot(noLazyHurlBot)
 
 
@@ -50,6 +51,7 @@ fun main() {
 
 
 val logger = LoggerFactory.getLogger("de.darmstadtgaa.nolazyhurlbot")
+
 class Config {
     private val config = ConfigurationProperties.systemProperties() overriding
             EnvironmentVariables() overriding
@@ -67,10 +69,13 @@ class Config {
 
 
 class NoLazyHurlBot(private val token: String, private val publicChatId: String) : TelegramLongPollingBot() {
-    var lastTotalKilometers =  transaction {
-        Runs.slice(Runs.length.sum()).select{Runs.isBike eq false and (Runs.isConfirmed eq true)}.firstOrNull()?.getOrNull(
-            Runs.length.sum())
+    var lastTotalKilometers = transaction {
+        Runs.slice(Runs.length.sum()).select { Runs.isBike eq false and (Runs.isConfirmed eq true) }.firstOrNull()
+            ?.getOrNull(
+                Runs.length.sum()
+            )
     }
+
     init {
         logger.debug(lastTotalKilometers.toString())
     }
@@ -83,11 +88,10 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
         return token
     }
 
-    val hashtagRegex = Regex("#nolazyhurl",RegexOption.IGNORE_CASE)
-    val bikeHastagRegex = Regex("#nolazybike",RegexOption.IGNORE_CASE)
-    val lengthRegex = Regex("""(\d+)[\.,]*(\d*)\s*(km|mi[\s$])*""",RegexOption.IGNORE_CASE)
+    val hashtagRegex = Regex("#nolazyhurl", RegexOption.IGNORE_CASE)
+    val bikeHastagRegex = Regex("#nolazybike", RegexOption.IGNORE_CASE)
+    val lengthRegex = Regex("""(\d+)[\.,]*(\d*)\s*(km|mi[\s$])*""", RegexOption.IGNORE_CASE)
     var numberFormatter: NumberFormat = DecimalFormat("#0.00")
-
 
 
     private final val CORRECT_VALUE_CALLBACK = "correctValue"
@@ -98,7 +102,7 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
     override fun onUpdateReceived(update: Update?) {
         update?.let {
             logger.debug(it.toString())
-            if(it.hasMessage()) {
+            if (it.hasMessage()) {
                 handleSimpleMessage(update)
             } else if (it.hasCallbackQuery()) {
 
@@ -106,7 +110,7 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
                 val runId = command.split("/").getOrNull(1)?.toInt()
                 if (command.startsWith(CORRECT_VALUE_CALLBACK)) {
                     confirmRunLength(runId, it)
-                } else if(command.startsWith(WRONG_VALUE_CALLBACK)) {
+                } else if (command.startsWith(WRONG_VALUE_CALLBACK)) {
                     cancelRunLength(runId, it)
                 }
                 logger.debug("Callback pressed")
@@ -141,7 +145,6 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
         var composedList = composeCompleteList()
 
 
-
         //Change Message
         val messageIdToEdit = it.callbackQuery.message.messageId
         val chatIdToEdit = it.callbackQuery.message.chatId
@@ -155,16 +158,20 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
             text = composedList
         })
         val total = transaction {
-            Runs.slice(Runs.length.sum()).select{Runs.isBike eq false and (Runs.isConfirmed eq true)}.firstOrNull()?.getOrNull(
-                Runs.length.sum())
+            Runs.slice(Runs.length.sum()).select { Runs.isBike eq false and (Runs.isConfirmed eq true) }.firstOrNull()
+                ?.getOrNull(
+                    Runs.length.sum()
+                )
         }
         val defValue = BigDecimal(0.0)
-        if (Math.floor((total?:defValue).toDouble()/100)>Math.floor(
-                (lastTotalKilometers?:defValue).toDouble()/100)) {
+        if (Math.floor((total ?: defValue).toDouble() / 100) > Math.floor(
+                (lastTotalKilometers ?: defValue).toDouble() / 100
+            )
+        ) {
             val command = SendMessage().apply {
                 chatId = publicChatId
-                text = "\uD83D\uDCAF\uD83C\uDFC3\u200D♂️\uD83E\uDDA0 Wir haben die nächsten 100 km"+
-                    System.lineSeparator()+composedList
+                text = "\uD83D\uDCAF\uD83C\uDFC3\u200D♂️\uD83E\uDDA0 Wir haben die nächsten 100 km" +
+                        System.lineSeparator() + composedList
             }
             execute(command)
         }
@@ -183,7 +190,7 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
                 .select { Runs.isConfirmed eq true and (Runs.isBike eq isBike) }
                 .groupBy(Runs.user)
                 .orderBy(Runs.length.sum() to SortOrder.DESC)
-            var count=0
+            var count = 0
 
             val listName = if (isBike) "#NoLazyBikeListe" else "#NoLazyHurlListe"
             val singularName = if (isBike) "Fahrt" else "Lauf"
@@ -191,16 +198,18 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
             sums.fold(listName, { acc, res ->
                 val name = res.getOrNull(Users.customAlias) ?: res[Users.officalName]
                 val numberOfRuns = res[Runs.length.count()]
-                val textRunRuns = if (numberOfRuns==1L) singularName else pluralName
-                count ++
-                acc + System.lineSeparator() + count+". "+
+                val textRunRuns = if (numberOfRuns == 1L) singularName else pluralName
+                count++
+                acc + System.lineSeparator() + count + ". " +
                         "$name: ${numberFormatter.format(res[Runs.length.sum()])} km in $numberOfRuns $textRunRuns"
             })
         }
 
         val total = transaction {
-            Runs.slice(Runs.length.sum()).select{Runs.isBike eq isBike and (Runs.isConfirmed eq true)}.firstOrNull()?.getOrNull(
-                Runs.length.sum())
+            Runs.slice(Runs.length.sum()).select { Runs.isBike eq isBike and (Runs.isConfirmed eq true) }.firstOrNull()
+                ?.getOrNull(
+                    Runs.length.sum()
+                )
         }
 
         composedList += System.lineSeparator() + System.lineSeparator() +
@@ -208,8 +217,8 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
         return composedList
     }
 
-    private fun composeCompleteList():String {
-        return composeList()+System.lineSeparator()+System.lineSeparator()+composeList(true)
+    private fun composeCompleteList(): String {
+        return composeList() + System.lineSeparator() + System.lineSeparator() + composeList(true)
     }
 
     var formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
@@ -250,10 +259,10 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
                         from.lastName ?: ""
                     )
                     val resultText = transaction {
-                        Run.find { Runs.user eq user.id }.fold("", { acc, run ->
-                            val activityType = if(run.isBike) "Fahrrad" else "Lauf"
+                        Run.find { Runs.user eq user.id and (Runs.isConfirmed eq true)}.fold("", { acc, run ->
+                            val activityType = if (run.isBike) "Fahrrad" else "Lauf"
                             acc + System.lineSeparator() +
-                                    activityType+
+                                    activityType +
                                     ": ${run.time.format(formatter)}: ${numberFormatter.format(run.length)} km"
                         })
                     }
@@ -264,20 +273,20 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
                 } else if (recievedText.startsWith("/allruns") && update.message.chat.isUserChat) {
                     val resultText = transaction {
                         val showIds = recievedText.contains("id")
-                        Run.all().fold("", { acc, run ->
-                            val activityType = if(run.isBike) "Fahrrad" else "Lauf"
+                        Run.find { Runs.isConfirmed eq true }.fold("", { acc, run ->
+                            val activityType = if (run.isBike) "Fahrrad" else "Lauf"
                             acc + System.lineSeparator() +
                                     "${run.time.format(formatter)} - ${run.user.customAlias
-                                        ?: run.user.officialName}: ${numberFormatter.format(run.length)} km"+
-                                    " ($activityType)"+
-                                    if(showIds) " id: ${run.id}" else ""
+                                        ?: run.user.officialName}: ${numberFormatter.format(run.length)} km" +
+                                    " ($activityType)" +
+                                    if (showIds) " id: ${run.id}" else ""
                         })
                     }
                     execute(SendMessage().apply {
                         chatId = message.chatId.toString()
                         text = resultText
                     })
-                } else if(recievedText.startsWith("/delete") && update.message.chat.isUserChat) {
+                } else if (recievedText.startsWith("/delete") && update.message.chat.isUserChat) {
 
                 }
 
@@ -285,7 +294,7 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
         }
     }
 
-    private fun handleHashtag(recievedText: String, message: Message, isBike:Boolean = false) {
+    private fun handleHashtag(recievedText: String, message: Message, isBike: Boolean = false) {
         if (lengthRegex.containsMatchIn(recievedText)) {
             //found nr.
             val matches = lengthRegex.find(recievedText)?.groups
@@ -302,7 +311,7 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
             var user = User.fromIdOrCreate(
                 userId,
                 message.from.firstName,
-                message.from.lastName?: ""
+                message.from.lastName ?: ""
             )
             val forwardFrom = message.forwardFrom
             if (forwardFrom != null) {
@@ -312,22 +321,45 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
                     forwardFrom.lastName ?: ""
                 )
             }
-            transaction {
-
-                val run = Run.new {
+            val run = transaction {
+                 Run.new {
                     this.user = user
                     this.length = number.toBigDecimal()
                     this.time = LocalDateTime.now()
                     this.isConfirmed = false
                     this.isBike = isBike
                 }
+            }
 
-                val actionVerb = if(isBike) "Fahrrad gefahren" else "gelaufen"
-                val textReturn = "Du bist ${numberFormatter.format(number)} km $actionVerb, korrekt?"
+            val actionVerb = if (isBike) "Fahrrad gefahren" else "gelaufen"
+            val textReturn = user.officialName + " ist ${numberFormatter.format(number)} km $actionVerb, korrekt?"
+
+            val command = SendMessage().apply {
+                chatId = message.from.id.toString()
+                text = textReturn
+                //disableNotification()
+                replyMarkup = InlineKeyboardMarkup().apply {
+                    keyboard = mutableListOf(
+                        mutableListOf(
+                            InlineKeyboardButton().apply {
+                                text = "Ja"
+                                callbackData = "$CORRECT_VALUE_CALLBACK/${run.id.value}"
+                            },
+                            InlineKeyboardButton().apply {
+                                text = "Nein"
+                                callbackData = "$WRONG_VALUE_CALLBACK/${run.id.value}"
+                            })
+                    )
+                }
+            }
+            try {
+                execute(command)
+            } catch ( e: TelegramApiException) {
+                logger.info("Don't have any privilege, sending to Daniel")
                 val command = SendMessage().apply {
-                    chatId = message.from.id.toString()
+                    chatId = "12672170"
                     text = textReturn
-                    disableNotification()
+                    //disableNotification()
                     replyMarkup = InlineKeyboardMarkup().apply {
                         keyboard = mutableListOf(
                             mutableListOf(
@@ -343,10 +375,10 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
                     }
                 }
                 execute(command)
-
-
-
             }
+
+
+
         } else {
             val command = SendMessage().apply {
                 chatId = message.from.id.toString()
@@ -356,8 +388,6 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
         }
         logger.debug("Found correct Hashtag")
     }
-
-
 
 
 }

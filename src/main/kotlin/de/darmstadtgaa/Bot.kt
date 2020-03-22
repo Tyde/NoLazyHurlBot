@@ -1,5 +1,7 @@
 package de.darmstadtgaa
 
+import ch.qos.logback.classic.LoggerContext
+import ch.qos.logback.core.util.StatusPrinter
 import com.natpryce.konfig.*
 import com.natpryce.konfig.Key
 import org.jetbrains.exposed.sql.*
@@ -45,6 +47,7 @@ fun main() {
     val botsApi = TelegramBotsApi()
     val noLazyHurlBot = NoLazyHurlBot(token, publicChatId)
     botsApi.registerBot(noLazyHurlBot)
+
 
 
 }

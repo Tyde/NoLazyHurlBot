@@ -5,7 +5,7 @@ plugins {
 }
 
 group 'de.darmstadtgaa'
-version '0.2.4'
+version '0.2.5'
 
 sourceCompatibility = 1.8
 

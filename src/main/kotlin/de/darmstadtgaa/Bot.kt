@@ -168,13 +168,17 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
                 (lastTotalKilometers ?: defValue).toDouble() / 100
             )
         ) {
-            val command = SendMessage().apply {
-                chatId = publicChatId
-                text = "\uD83D\uDCAF\uD83C\uDFC3\u200D♂️\uD83E\uDDA0 Wir haben die nächsten 100 km" +
-                        System.lineSeparator() + composedList
-            }
-            execute(command)
+            send100kmList(composedList)
         }
+    }
+
+    private fun send100kmList(composedList: String) {
+        val command = SendMessage().apply {
+            chatId = publicChatId
+            text = "\uD83D\uDCAF\uD83C\uDFC3\u200D♂️\uD83E\uDDA0 Wir haben die nächsten 100 km" +
+                    System.lineSeparator() + composedList
+        }
+        execute(command)
     }
 
     private fun composeList(isBike: Boolean = false): String {
@@ -288,6 +292,8 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
                     })
                 } else if (recievedText.startsWith("/delete") && update.message.chat.isUserChat) {
 
+                } else if(recievedText.startsWith("/trigger100km") && update.message.chat.isUserChat) {
+                    send100kmList(composeCompleteList())
                 }
 
             }

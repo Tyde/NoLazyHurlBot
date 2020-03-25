@@ -1,7 +1,5 @@
 package de.darmstadtgaa
 
-import ch.qos.logback.classic.LoggerContext
-import ch.qos.logback.core.util.StatusPrinter
 import com.natpryce.konfig.*
 import com.natpryce.konfig.Key
 import org.jetbrains.exposed.sql.*
@@ -49,7 +47,7 @@ fun main() {
     botsApi.registerBot(noLazyHurlBot)
 
 
-    val website = Website()
+    Website()
 
 
 }
@@ -99,10 +97,10 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
     var numberFormatter: NumberFormat = DecimalFormat("#0.00")
 
 
-    private final val CORRECT_VALUE_CALLBACK = "correctValue"
-    private final val WRONG_VALUE_CALLBACK = "wrongValue"
+    private val CORRECT_VALUE_CALLBACK = "correctValue"
+    private val WRONG_VALUE_CALLBACK = "wrongValue"
 
-    private final val MILES_TO_KM = 1.609344
+    private val MILES_TO_KM = 1.609344
 
     override fun onUpdateReceived(update: Update?) {
         update?.let {
@@ -147,7 +145,7 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
             val run = runId?.let { it -> Run.find { Runs.id eq it }.firstOrNull() }
             run?.isConfirmed = true
         }
-        var composedList = composeCompleteList()
+        val composedList = composeCompleteList()
 
 
         //Change Message
@@ -296,7 +294,7 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
                         text = resultText
                     })
                 } else if (recievedText.startsWith("/delete") && update.message.chat.isUserChat) {
-
+                    logger.debug("Delete called but not implemented")
                 } else if(recievedText.startsWith("/trigger100km") && update.message.chat.isUserChat) {
                     send100kmList(composeCompleteList())
                 }
@@ -367,7 +365,7 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
                 execute(command)
             } catch ( e: TelegramApiException) {
                 logger.info("Don't have any privilege, sending to Daniel")
-                val command = SendMessage().apply {
+                val sendMessage = SendMessage().apply {
                     chatId = "12672170"
                     text = textReturn
                     //disableNotification()
@@ -385,7 +383,7 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
                         )
                     }
                 }
-                execute(command)
+                execute(sendMessage)
             }
 
 

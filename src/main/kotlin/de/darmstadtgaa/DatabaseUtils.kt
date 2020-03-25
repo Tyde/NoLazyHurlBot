@@ -9,7 +9,6 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.Function
 import org.jetbrains.exposed.sql.`java-time`.datetime
 import org.jetbrains.exposed.sql.transactions.transaction
-import java.io.File
 import java.time.format.DateTimeFormatter
 
 
@@ -57,17 +56,7 @@ object Runs : IntIdTable() {
     val isBike = bool("is_bike").default(false)
 }
 
-object Aliases {
-    init {
-        val users = transaction {
-            Users.selectAll().orderBy(Users.id)
-                .map { User.wrapRow(it) }
-        }
-        val aliases = File("Stadtviertel.txt").useLines { it.toList() }
-    }
 
-
-}
 
 var formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 class Run(id:EntityID<Int>) : IntEntity(id) {

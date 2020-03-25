@@ -38,14 +38,17 @@
             series: [{
                 name: 'Total',
                 type: 'line',
+                step: 'end',
                 data: ${chartDataTotal}
             },{
                 name: 'Running',
                 type: 'line',
+                step: 'end',
                 data: ${chartDataRuns}
             },{
                 name: 'Biking',
                 type: 'line',
+                step: 'end',
                 data: ${chartDataBike}
             }]
         }

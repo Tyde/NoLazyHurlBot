@@ -18,9 +18,9 @@
                             ${userRun.user.bestName}
                         </#if>
                     </a></td>
-                <td>${userRun.totalKM}</td>
+                <td>${userRun.totalKM?string["0.00"]}</td>
                 <td>${userRun.totalRuns}</td>
-                <td>${userRun.getAverage()}</td>
+                <td>${userRun.getAverage()?string["0.00"]}</td>
             </tr>
             <tr class="collapse" id="collapse${userRun.user.id}">
                 <td colspan="4">

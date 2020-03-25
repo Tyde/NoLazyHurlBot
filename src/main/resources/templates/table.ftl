@@ -1,4 +1,4 @@
-<#macro runTable runList>
+<#macro runTable runList redacted>
     <table class="table">
         <thead>
         <tr>
@@ -15,7 +15,7 @@
                         <#if redacted>
                             Redacted (privacy)
                         <#else>
-                            ${userRun.user.officialName}
+                            ${userRun.user.bestName}
                         </#if>
                     </a></td>
                 <td>${userRun.totalKM}</td>

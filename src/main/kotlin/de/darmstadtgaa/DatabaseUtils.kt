@@ -46,6 +46,9 @@ class User(telegramUserId: EntityID<Int>) : IntEntity(telegramUserId) {
 
     var customAlias by Users.customAlias
     var officialName by Users.officalName
+
+    val bestName:String
+        get() = customAlias ?: officialName
 }
 
 object Runs : IntIdTable() {

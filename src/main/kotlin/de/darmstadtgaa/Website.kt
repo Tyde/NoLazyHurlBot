@@ -10,10 +10,7 @@ import io.ktor.routing.get
 import io.ktor.routing.routing
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
-import org.jetbrains.exposed.sql.Op
-import org.jetbrains.exposed.sql.SortOrder
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 
 class Website {
@@ -32,12 +29,24 @@ class Website {
                     val chartDataTotal = extractChartData()
                     val chartDataRuns = extractChartData(Op.build { Runs.isBike eq false })
                     val chartDataBike = extractChartData(Op.build { Runs.isBike eq true })
+
+                    val totals = transaction { Runs.slice(Runs.length.sum())
+                        .select { Runs.isConfirmed eq true }
+                        .groupBy(Runs.isBike)
+                        .orderBy(Runs.isBike to SortOrder.DESC)
+                        .map { it[Runs.length.sum()]?.toDouble() }}
+                    val runKM = totals[1]?:0.0
+                    val bikeKM = totals[0]?:0.0
+                    val totalKM = runKM + bikeKM
                     call.respond(FreeMarkerContent("index.ftl", mapOf("userRuns" to userRuns,
                         "userBikeRuns" to userBikeRuns,
                         "redacted" to !secretCorrect,
                         "chartDataTotal" to chartDataTotal,
                         "chartDataRuns" to chartDataRuns,
-                        "chartDataBike" to chartDataBike
+                        "chartDataBike" to chartDataBike,
+                        "totalKM" to totalKM,
+                        "runKM" to runKM,
+                        "bikeKM" to bikeKM
                     ),""))
                 }
             }

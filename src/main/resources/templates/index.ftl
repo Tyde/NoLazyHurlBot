@@ -4,6 +4,9 @@
 <#-- @ftlvariable name="chartDataTotal" type="String" -->
 <#-- @ftlvariable name="chartDataRuns" type="String" -->
 <#-- @ftlvariable name="chartDataBike" type="String" -->
+<#-- @ftlvariable name="totalKM" type="Double" -->
+<#-- @ftlvariable name="runKM" type="Double" -->
+<#-- @ftlvariable name="bikeKM" type="Double" -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -18,8 +21,10 @@
 <body>
 
 <div class="container">
+    <p class="h3 mt-3" >Since 14th of March Darmstadt GAA has left ${totalKM?string["0.##"]} km behind.
+        While ${runKM?string["0.##"]} km have been run, ${bikeKM?string["0.##"]} km have been on bike.</p>
 
-    <div id="timechart" style="width: 768px;height:300px;margin: auto;"></div>
+    <div id="timechart" class="mt-3" style="width: 768px;height:300px;margin: auto;"></div>
     <script type="application/javascript">
         var timechart = echarts.init(document.getElementById('timechart'))
 
@@ -58,9 +63,9 @@
     <#import "table.ftl" as table>
 
     <h2>Running</h2>
-    <@table.runTable runList=userRuns />
+    <@table.runTable runList=userRuns redacted=redacted/>
     <h2>Biking</h2>
-    <@table.runTable runList=userBikeRuns />
+    <@table.runTable runList=userBikeRuns redacted=redacted/>
 
 
 </div>

@@ -5,9 +5,15 @@ import org.jetbrains.exposed.dao.IntEntityClass
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.dao.id.IdTable
 import org.jetbrains.exposed.dao.id.IntIdTable
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.Function
 import org.jetbrains.exposed.sql.`java-time`.datetime
-import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.io.File
+import java.time.format.DateTimeFormatter
+
+
+
 
 
 object Users : IdTable<Int>() {
@@ -51,6 +57,19 @@ object Runs : IntIdTable() {
     val isBike = bool("is_bike").default(false)
 }
 
+object Aliases {
+    init {
+        val users = transaction {
+            Users.selectAll().orderBy(Users.id)
+                .map { User.wrapRow(it) }
+        }
+        val aliases = File("Stadtviertel.txt").useLines { it.toList() }
+    }
+
+
+}
+
+var formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 class Run(id:EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<Run>(Runs)
     var user by User referencedOn Runs.user
@@ -58,6 +77,63 @@ class Run(id:EntityID<Int>) : IntEntity(id) {
     var length by Runs.length
     var isConfirmed by Runs.isConfirmed
     var isBike by Runs.isBike
+
+    fun formatTime():String {
+        return time.format(formatter)
+    }
 }
+
+
+/**
+ * Helper functions
+ */
+
+class SumOver<T>(
+    /** Returns the expression from which the sum partition is calculated. */
+    val expr: Expression<T>,
+    val partition: Expression<*>?,
+    val order: Expression<*>?,
+    _columnType: IColumnType
+) : Function<T?>(_columnType) {
+    override fun toQueryBuilder(queryBuilder: QueryBuilder): Unit = queryBuilder {
+        +"(SUM("
+        +expr
+        +") OVER "
+        if (partition!=null){
+            +"( PARTITION BY "
+            +partition
+            +")"
+        }
+        if (order!=null) {
+            +"( ORDER BY "
+            +order
+            +")"
+        }
+        +")"
+        }
+}
+fun <T : Any?> ExpressionWithColumnType<T>.sumOver(partition: Expression<*>? = null,order: Expression<*>? = null): SumOver<T> =
+    SumOver(this, partition, order, this.columnType)
+
+
+
+class CountOver(
+    /** Returns the expression from which the rows are counted. */
+    val expr: Expression<*>,
+    /** the expression over which the counting is grouped */
+    val over: Expression<*>,
+    /** Returns whether only distinct element should be count. */
+    val distinct: Boolean = false
+) : Function<Long>(LongColumnType()) {
+    override fun toQueryBuilder(queryBuilder: QueryBuilder): Unit = queryBuilder {
+        +"(COUNT("
+        if (distinct) +"DISTINCT "
+        +expr
+        +") OVER (PARTITION BY "
+        +over
+        +"))"
+    }
+}
+fun ExpressionWithColumnType<*>.countOver(over: Expression<*>): CountOver = CountOver(this,over)
 
 

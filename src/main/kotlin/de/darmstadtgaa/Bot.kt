@@ -49,6 +49,8 @@ fun main() {
     botsApi.registerBot(noLazyHurlBot)
 
 
+    val website = Website()
+
 
 }
 
@@ -390,7 +392,7 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
 
         } else {
             val command = SendMessage().apply {
-                chatId = message.from.id.toString()
+                chatId = message.chatId.toString()
                 text = "Ich kann die Streckenlänge nicht erkennen. Bitte im Format #NoLazyHurl ##,## km schreiben"
             }
             execute(command)

@@ -171,11 +171,13 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
                 (lastTotalKilometers ?: defValue).toDouble() / 100
             )
         ) {
+            this.lastTotalKilometers = total
             send100kmList(composedList)
         }
     }
 
     private fun send100kmList(composedList: String) {
+
         val command = SendMessage().apply {
             chatId = publicChatId
             text = "\uD83D\uDCAF\uD83C\uDFC3\u200D♂️\uD83E\uDDA0 Wir haben die nächsten 100 km" +

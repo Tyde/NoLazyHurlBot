@@ -22,8 +22,10 @@ import java.math.BigDecimal
 import java.sql.Connection
 import java.text.DecimalFormat
 import java.text.NumberFormat
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.*
 
 
 fun main() {
@@ -39,6 +41,7 @@ fun main() {
         //addLogger(StdOutSqlLogger)
         SchemaUtils.create(Users)
         SchemaUtils.create(Runs)
+        SchemaUtils.create(HurlingSessions)
         //println("Tournaments: ${Tournaments.selectAll()}")
     }
     ApiContextInitializer.init()
@@ -93,12 +96,16 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
 
     val hashtagRegex = Regex("#nolazyhurl", RegexOption.IGNORE_CASE)
     val bikeHastagRegex = Regex("#nolazybike", RegexOption.IGNORE_CASE)
+    val amBallBleibenRegex = Regex("#amballbleiben",RegexOption.IGNORE_CASE)
     val lengthRegex = Regex("""(\d+)[\.,]*(\d*)\s*(km|mi[\s$])*""", RegexOption.IGNORE_CASE)
     var numberFormatter: NumberFormat = DecimalFormat("#0.00")
 
 
     private val CORRECT_VALUE_CALLBACK = "correctValue"
     private val WRONG_VALUE_CALLBACK = "wrongValue"
+
+    private val CORRECT_VALUE_CALLBACK_HURLING = "HcorrectValue"
+    private val WRONG_VALUE_CALLBACK_HURLING = "HwrongValue"
 
     private val MILES_TO_KM = 1.609344
 
@@ -110,11 +117,15 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
             } else if (it.hasCallbackQuery()) {
 
                 val command = it.callbackQuery.data
-                val runId = command.split("/").getOrNull(1)?.toInt()
+                val activityId = command.split("/").getOrNull(1)?.toInt()
                 if (command.startsWith(CORRECT_VALUE_CALLBACK)) {
-                    confirmRunLength(runId, it)
+                    confirmActivity(activityId, it)
                 } else if (command.startsWith(WRONG_VALUE_CALLBACK)) {
-                    cancelRunLength(runId, it)
+                    cancelActivity(activityId, it)
+                } else if(command.startsWith(CORRECT_VALUE_CALLBACK_HURLING)) {
+                    confirmActivity(activityId, it, isHurlingSession = true)
+                } else if(command.startsWith(WRONG_VALUE_CALLBACK_HURLING)) {
+                    cancelActivity(activityId, it, isHurlingSession = true)
                 }
                 logger.debug("Callback pressed")
 
@@ -122,10 +133,13 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
         }
     }
 
-    private fun cancelRunLength(runId: Int?, it: Update) {
+    private fun cancelActivity(activityId: Int?, it: Update, isHurlingSession: Boolean = false) {
         transaction {
-            val run = runId?.let { it -> Run.find { Runs.id eq it }.firstOrNull() }
-            run?.delete()
+            val activity = if (isHurlingSession)
+                activityId?.let { it -> HurlingSession.find { HurlingSessions.id eq it }.firstOrNull() }
+            else
+                activityId?.let { it -> Run.find { Runs.id eq it }.firstOrNull() }
+            activity?.delete()
         }
 
         //Change Message
@@ -137,13 +151,18 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
         })
     }
 
-    private fun confirmRunLength(runId: Int?, it: Update) {
-        logger.debug("Value correct")
 
+    private fun confirmActivity(activityId: Int?, it: Update, isHurlingSession:Boolean = false) {
         //Confirm run
         transaction {
-            val run = runId?.let { it -> Run.find { Runs.id eq it }.firstOrNull() }
-            run?.isConfirmed = true
+            if (isHurlingSession) {
+                val session = activityId?.let {
+                        it -> HurlingSession.find { HurlingSessions.id eq it }.firstOrNull() }
+                session?.isConfirmed = true
+            } else {
+                val run = activityId?.let { it -> Run.find { Runs.id eq it }.firstOrNull() }
+                run?.isConfirmed = true
+            }
         }
         val composedList = composeCompleteList()
 
@@ -226,8 +245,29 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
         return composedList
     }
 
+    private fun composeHurlingSessionList(): String {
+        return transaction {
+            var count = 0
+            (HurlingSessions innerJoin Users)
+                .slice(HurlingSessions.user.count(),
+                    Users.customAlias,
+                    Users.officalName)
+                .select { HurlingSessions.isConfirmed eq true }
+                .groupBy(HurlingSessions.user)
+                .orderBy(HurlingSessions.user.count() to SortOrder.DESC)
+                .fold("#AmBallBleibenListe", { acc, res ->
+                    val name = res.getOrNull(Users.customAlias) ?: res[Users.officalName]
+                    val numberOfSessions = res[HurlingSessions.user.count()]
+                    count ++
+                    acc + System.lineSeparator() + count + ". "+
+                            "$name: ${numberOfSessions}"
+                })
+        }
+    }
     private fun composeCompleteList(): String {
-        return composeList() + System.lineSeparator() + System.lineSeparator() + composeList(true)
+        return composeList() + System.lineSeparator() +
+                System.lineSeparator() + composeList(true) + System.lineSeparator() +
+                System.lineSeparator() + composeHurlingSessionList()
     }
 
     var formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
@@ -246,6 +286,49 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
             } else if (bikeHastagRegex.containsMatchIn(recievedText)) {
                 //Handle BikeHastag
                 handleHashtag(recievedText, message, true)
+            } else if (amBallBleibenRegex.containsMatchIn(recievedText)) {
+                //Handle am Ball Bleiben entry
+                val userId = message.from.id
+                var user = User.fromIdOrCreate(
+                    userId,
+                    message.from.firstName,
+                    message.from.lastName ?: ""
+                )
+                val session = transaction {
+                    val ldt = LocalDateTime.ofInstant(Instant.ofEpochMilli(message.date.toLong()),
+                        TimeZone.getDefault().toZoneId())
+                    HurlingSession.new {
+                        this.user = user
+                        this.time = ldt
+                        this.isConfirmed = false
+                    }
+                }
+                val textReturn = user.officialName + " hat eine Hurling Session eingelegt. Richtig?"
+                val command = SendMessage().apply {
+                    chatId = message.from.id.toString()
+                    text = textReturn
+                    //disableNotification()
+                    replyMarkup = InlineKeyboardMarkup().apply {
+                        keyboard = mutableListOf(
+                            mutableListOf(
+                                InlineKeyboardButton().apply {
+                                    text = "Ja"
+                                    callbackData = "$CORRECT_VALUE_CALLBACK_HURLING/${session.id.value}"
+                                },
+                                InlineKeyboardButton().apply {
+                                    text = "Nein"
+                                    callbackData = "$WRONG_VALUE_CALLBACK_HURLING/${session.id.value}"
+                                })
+                        )
+                    }
+                }
+                try {
+                    execute(command)
+                } catch (e:TelegramApiException) {
+                    command.chatId = "12672170"
+                    logger.debug("got "+e.message)
+                    execute(command)
+                }
             } else if (recievedText.startsWith("/")) {
                 //Only react to list command in correct circumstances
                 val isGroupCommand = recievedText.equals("/list@NoLazyHurlBot", ignoreCase = true) &&

@@ -75,6 +75,19 @@ class Run(id:EntityID<Int>) : IntEntity(id) {
     }
 }
 
+object HurlingSessions : IntIdTable() {
+    val user = reference("user", Users)
+    val time = datetime("time")
+    val isConfirmed = bool("is_confirmed")
+}
+
+class HurlingSession(id:EntityID<Int>) : IntEntity(id) {
+    companion object : IntEntityClass<HurlingSession>(HurlingSessions)
+    var user by User referencedOn HurlingSessions.user
+    var time by HurlingSessions.time
+    var isConfirmed by HurlingSessions.isConfirmed
+}
+
 
 /**
  * Helper functions

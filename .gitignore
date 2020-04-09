@@ -1,0 +1,8 @@
+build/
+backup/
+.idea/
+.gradle/
+
+bot.properties
+data.db*
+log*

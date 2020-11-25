@@ -19,6 +19,7 @@ import java.math.BigDecimal
 import java.sql.Connection
 import java.time.Instant
 import java.time.LocalDateTime
+import java.time.Month
 import java.time.format.DateTimeFormatter
 import java.util.*
 
@@ -27,6 +28,7 @@ fun main() {
     val conf = Config()
     val token = conf.token
     val publicChatId = conf.publicChatId
+
 
 
     Database.connect("jdbc:sqlite:data.db", "org.sqlite.JDBC")
@@ -52,6 +54,9 @@ fun main() {
 
 
 val logger = LoggerFactory.getLogger("de.darmstadtgaa.nolazyhurlbot")
+object Settings {
+    val cutOffDate = LocalDateTime.of(2020, Month.NOVEMBER,2,0,0)
+}
 
 
 class NoLazyHurlBot(private val token: String, private val publicChatId: String) : TelegramLongPollingBot() {
@@ -374,7 +379,7 @@ class NoLazyHurlBot(private val token: String, private val publicChatId: String)
             text = composedList
         })
         val total = transaction {
-            Runs.slice(Runs.length.sum()).select { Runs.isBike eq false and (Runs.isConfirmed eq true) }.firstOrNull()
+            Runs.slice(Runs.length.sum()).select { Runs.isBike eq false and (Runs.isConfirmed eq true) and (Runs.time greaterEq Settings.cutOffDate)}.firstOrNull()
                 ?.getOrNull(
                     Runs.length.sum()
                 )

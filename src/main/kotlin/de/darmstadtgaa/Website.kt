@@ -31,12 +31,14 @@ class Website {
                     val chartDataBike = extractChartData(Op.build { Runs.isBike eq true })
 
                     val totals = transaction { Runs.slice(Runs.length.sum())
-                        .select { Runs.isConfirmed eq true }
+                        .select { Runs.isConfirmed eq true and (Runs.time greaterEq Settings.cutOffDate) }
                         .groupBy(Runs.isBike)
                         .orderBy(Runs.isBike to SortOrder.DESC)
-                        .map { it[Runs.length.sum()]?.toDouble() }}
-                    val runKM = totals[1]?:0.0
-                    val bikeKM = totals[0]?:0.0
+                        .map { it[Runs.length.sum()]?.toDouble()}}
+
+                    val runKM = totals.getOrNull(1)?:0.0
+                    val bikeKM = totals.getOrNull(0)?:0.0
+
                     val totalKM = runKM + bikeKM
                     call.respond(FreeMarkerContent("index.ftl", mapOf("userRuns" to userRuns,
                         "userBikeRuns" to userBikeRuns,
@@ -50,11 +52,12 @@ class Website {
                     ),""))
                 }
             }
+
         }.start(wait = true)
     }
 
     private fun extractChartData(condition:Op<Boolean>?=null): String {
-        val baseCondition = Op.build { (Runs.isConfirmed eq true) }
+        val baseCondition = Op.build { (Runs.isConfirmed eq true) and (Runs.time greaterEq Settings.cutOffDate)}
         val completeCondition = condition?.let { Op.build { condition and baseCondition } }?:baseCondition
         return transaction {
             Runs.slice(
@@ -74,7 +77,7 @@ class Website {
                 *Users.columns.toTypedArray(),
                 Runs.length.sumOver(partition = Users.id),
                 Runs.length.countOver(Users.id)
-            ). select { Runs.isConfirmed eq true and (Runs.isBike eq !isRunning) }.orderBy(Runs.length.sumOver(Users.id) to SortOrder.DESC)
+            ). select { Runs.isConfirmed eq true and (Runs.isBike eq !isRunning) and (Runs.time greaterEq Settings.cutOffDate)}.orderBy(Runs.length.sumOver(Users.id) to SortOrder.DESC)
                 .forEach {
                     val user = User.wrapRow(it)
                     val run = Run.wrapRow(it)

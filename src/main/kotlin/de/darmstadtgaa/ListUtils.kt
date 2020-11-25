@@ -1,7 +1,11 @@
 package de.darmstadtgaa
 
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.`java-time`.CurrentDateTime
+import org.jetbrains.exposed.sql.`java-time`.dateLiteral
+import org.jetbrains.exposed.sql.`java-time`.dateTimeLiteral
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.math.BigDecimal
 import java.text.DecimalFormat
 import java.text.NumberFormat
 import kotlin.and
@@ -18,7 +22,8 @@ object ListUtils {
                     Users.customAlias,
                     Users.officalName
                 )
-                .select { Runs.isConfirmed eq true and (Runs.isBike eq isBike) }
+                .select { Runs.isConfirmed eq true and (Runs.isBike eq isBike) and
+                        (Runs.time greater Settings.cutOffDate)}
                 .groupBy(Runs.user)
                 .orderBy(Runs.length.sum() to SortOrder.DESC)
             var count = 0
@@ -37,17 +42,21 @@ object ListUtils {
             })
         }
 
+
         val total = transaction {
             Runs.slice(Runs.length.sum())
-                .select { Runs.isBike eq isBike and (Runs.isConfirmed eq true) }
+                .select { Runs.isBike eq isBike and (Runs.isConfirmed eq true) and (Runs.time greater Settings.cutOffDate)}
                 .firstOrNull()
                 ?.getOrNull(
                     Runs.length.sum()
                 )
-        }
+        }?: BigDecimal(0)
+
 
         composedList += System.lineSeparator() + System.lineSeparator() +
                 "Gesamt: ${numberFormatter.format(total)} km"
+
+
         return composedList
     }
 
@@ -60,7 +69,7 @@ object ListUtils {
                     Users.customAlias,
                     Users.officalName
                 )
-                .select { HurlingSessions.isConfirmed eq true }
+                .select { HurlingSessions.isConfirmed eq true and (HurlingSessions.time greater Settings.cutOffDate)}
                 .groupBy(HurlingSessions.user)
                 .orderBy(HurlingSessions.user.count() to SortOrder.DESC)
                 .fold("#AmBallBleibenListe", { acc, res ->
